@@ -1,0 +1,19 @@
+GPU Capacity Finder includes the following third-party material.
+
+-------------------------------------------------------------------------------
+Natural Earth
+-------------------------------------------------------------------------------
+Data set: Natural Earth 1:110m physical vectors, "land" polygons (ne_110m_land),
+          version 5.2.0-pre (master branch of natural-earth-vector on the retrieval date)
+Source:   https://www.naturalearthdata.com/
+          (retrieved as GeoJSON from
+          https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_land.geojson)
+Retrieved: 2026-11-11
+Used in:  web/world.json (the land outline behind the Region map). The polygons
+          were projected to x = (longitude + 180) * 2, y = (90 - latitude) * 2,
+          rounded to one decimal, and joined into one SVG path. Polygons that lie
+          entirely south of latitude 60 S (Antarctica) were left out.
+
+License:  Natural Earth data is in the public domain. Per the Natural Earth terms
+          of use (https://www.naturalearthdata.com/about/terms-of-use/), no
+          permission is needed to use it, and no attribution is required.
