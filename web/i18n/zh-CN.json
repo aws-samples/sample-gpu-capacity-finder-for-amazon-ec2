@@ -142,6 +142,7 @@
   "cap.colPrice": "Spot 价格 / 小时",
   "cap.reserveCli": "使用 CLI 预留",
   "cap.noScores": "此分数组尚无 Spot 分数。",
+  "cap.scoreNone": "{type} 没有 Spot 分数。",
   "cap.noPrice": "无价格",
   "cap.noZones": "没有可用区提供此实例类型。",
   "cap.noType": "此区域没有可显示的实例类型。",

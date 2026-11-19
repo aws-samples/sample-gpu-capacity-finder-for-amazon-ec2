@@ -142,6 +142,7 @@
   "cap.colPrice": "Spot 價格 / 小時",
   "cap.reserveCli": "使用 CLI 預留",
   "cap.noScores": "此分數群組尚無 Spot 分數。",
+  "cap.scoreNone": "{type} 沒有 Spot 分數。",
   "cap.noPrice": "沒有價格",
   "cap.noZones": "沒有任何可用區域提供此執行個體類型。",
   "cap.noType": "此區域沒有可顯示的執行個體類型。",

@@ -83,7 +83,9 @@ function pickLocale() {
 }
 
 async function loadStrings(code) {
-  const resp = await fetch(`i18n/${code}.json`);
+  // "no-cache" makes the browser ask for a newer file on every load (a cheap 304 when nothing changed). Without it a browser can keep an
+  // old language file after a release and show a new key as raw text next to the new script.
+  const resp = await fetch(`i18n/${code}.json`, { cache: "no-cache" });
   if (!resp.ok) throw new Error(`i18n/${code}.json (${resp.status})`);
   return resp.json();
 }
@@ -1894,6 +1896,9 @@ function renderCapScores() {
       regionLabel(region), h("b", { class: `score ${scoreClass(v)}` }, v));
   }));
   if (g && !scores.length && !d.errors.scores) box.append(h("span", { class: "muted" }, t("cap.noScores")));
+  // A type with no score group (its family is not monitored, or its score is still pending) has no chips. Say so here,
+  // so the section is not empty; the note below says why. A failed score request keeps its own error message instead.
+  if (!g && !d.errors.scores) box.append(h("span", { class: "muted" }, t("cap.scoreNone", { type: d.type })));
   setReloading(box, cap.loading);
 }
 
@@ -3576,7 +3581,7 @@ async function startApp() {
 (async function main() {
   try { localStorage.removeItem("cmpOnlyMine"); } catch { /* storage blocked */ }   // flag of a removed option
   $("boot-retry").addEventListener("click", () => (cfg && sessionStorage.getItem("idToken") ? startApp() : location.reload()));
-  try { cfg = await (await fetch("config.json")).json(); } catch (e) { showBootError(e); return; }
+  try { cfg = await (await fetch("config.json", { cache: "no-cache" })).json(); } catch (e) { showBootError(e); return; }
   locale = pickLocale();
   try { await setLocale(locale); } catch { /* the built-in text covers the boot error */ }
   setUpLanguage();

@@ -570,3 +570,7 @@ details summary { cursor:pointer; color:var(--link); font-weight:700; margin:12p
 .popover .points { margin:0; }
 /* Dragging the map pans it; it must not select the map labels or the text around it. */
 #cmp-map { user-select:none; -webkit-user-select:none; }
+
+/* Capacity page: a thin line above the score, test launch and zone blocks */
+#panel-capacity section > h3, #panel-capacity .tl-section, #panel-capacity .zones-head { border-top:1px solid var(--line-soft); margin-top:16px; padding-top:14px; }
+#panel-capacity .tl-section h3 { margin-top:0; }

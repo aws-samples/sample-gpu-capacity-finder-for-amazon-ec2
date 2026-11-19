@@ -142,6 +142,7 @@
   "cap.colPrice": "Spot price / hr",
   "cap.reserveCli": "Reserve with CLI",
   "cap.noScores": "No Spot score yet for this score group.",
+  "cap.scoreNone": "No Spot score for {type}.",
   "cap.noPrice": "No price",
   "cap.noZones": "No zone offers this instance type.",
   "cap.noType": "No instance type to show for this Region.",

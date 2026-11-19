@@ -347,3 +347,10 @@ def test_users_delete_note_names_a_real_admin_guide_section():
     assert "saved data" not in note
     # The HTML text before the script runs is the same message on one line; the page shows it as points.
     assert note.replace("\n", " ") in HTML
+
+
+def test_language_and_config_files_are_revalidated_on_every_load():
+    """A browser that keeps an old language file shows a new string key as raw text (seen after a release)."""
+    js = APP
+    assert "fetch(`i18n/${code}.json`, { cache: \"no-cache\" })" in js
+    assert "fetch(\"config.json\", { cache: \"no-cache\" })" in js
