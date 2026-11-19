@@ -1,5 +1,7 @@
 # GPU Capacity Finder
 
+> 這是範例程式碼，僅供非正式環境使用。在部署之前，您應與您的安全和法務團隊合作，以符合您組織的安全、法規和合規要求。
+
 > 本文件是[英文版 README](README.md) 的直譯，未增減任何內容。如有出入，以英文版為準。
 
 GPU Capacity Finder 是一個小型的決策輔助 Web 應用程式，您可以部署在自己的 AWS 帳戶中，用來尋找 Amazon Elastic Compute Cloud（Amazon EC2）上的 GPU 容量。一個頁面顯示各項公開的容量訊號：Capacity Block 方案、Spot 放置分數、Spot 價格、隨需定價，以及服務配額與其用量。您可以用一次有界限的測試啟動來確認某個訊號，並設定選用的電子郵件提醒。此頁面不管理執行個體、不預留容量，也不啟動您的工作負載。當您決定採取行動時，您可以在 EC2 主控台購買 Capacity Block，而頁面會提供建立 Capacity Reservation 的 AWS Command Line Interface（AWS CLI）命令，由您自行執行。

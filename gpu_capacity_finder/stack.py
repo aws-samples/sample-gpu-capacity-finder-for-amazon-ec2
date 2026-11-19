@@ -31,6 +31,12 @@ from aws_cdk import (
 from cdk_nag import NagSuppressions
 from constructs import Construct, IConstruct
 
+
+def as_list(value):
+    """A policy statement's Action as a list (the resolved template holds a string or a list)."""
+    return value if isinstance(value, list) else [value]
+
+
 PROBE_TAG = "gpu-capacity-finder-probe"
 PROBE_SG_TAG = "gpu-capacity-finder-probe-sg"
 # Partition-key prefix of the per-user daily probe counter items (PROBE_COUNT_PREFIX in lambda/api.py).
@@ -721,7 +727,7 @@ class FinderStack(Stack):
             self._function_alarms("NotifierFunction", notifier_fn, "notifier", notifier_timeout)
 
         # ------------------------------------------------- site contents
-        s3deploy.BucketDeployment(
+        site_deployment = s3deploy.BucketDeployment(
             self,
             "DeploySite",
             destination_bucket=bucket,
@@ -742,6 +748,20 @@ class FinderStack(Stack):
                     },
                 ),
             ],
+        )
+        # CDK gives the helper function cloudfront:CreateInvalidation and GetInvalidation on "*" (a role passed to
+        # BucketDeployment gets the same statement). Both actions support resource-level permissions, so scope them to
+        # this distribution. The statement index is found by its actions, and a unit test checks the final template.
+        # The stack has one BucketDeployment and one distribution. A second deployment would add its own distribution
+        # to this same statement, so this code would then have to list every distribution ARN.
+        helper_policy = site_deployment.handler_role.node.find_child("DefaultPolicy").node.default_child
+        statements = self.resolve(helper_policy.policy_document)["Statement"]
+        invalidation = [i for i, st in enumerate(statements) if "cloudfront:CreateInvalidation" in as_list(st["Action"])]
+        if len(invalidation) != 1:
+            raise RuntimeError("expected one CloudFront invalidation statement on the site deployment helper role")
+        helper_policy.add_property_override(
+            f"PolicyDocument.Statement.{invalidation[0]}.Resource",
+            self.format_arn(service="cloudfront", region="", resource="distribution", resource_name=dist.distribution_id),
         )
 
         CfnOutput(self, "SiteUrl", value=site_url)
@@ -1045,7 +1065,7 @@ class FinderStack(Stack):
                     helper,
                     [
                         {"id": "AwsSolutions-IAM4", "reason": "The CDK-generated BucketDeployment helper function uses the AWSLambdaBasicExecutionRole managed policy."},
-                        {"id": "AwsSolutions-IAM5", "reason": "The CDK-generated BucketDeployment helper reads the CDK asset bucket and writes the site bucket; CDK sets its permissions."},
+                        {"id": "AwsSolutions-IAM5", "reason": "The CDK-generated BucketDeployment helper reads the CDK asset bucket and writes the site bucket; CDK sets those S3 permissions. Its CloudFront invalidation actions are scoped to this stack's distribution."},
                         {"id": "AwsSolutions-L1", "reason": "The CDK-generated BucketDeployment helper function picks its own runtime."},
                     ],
                     apply_to_children=True,

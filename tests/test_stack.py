@@ -128,6 +128,21 @@ def test_no_ec2_write_statement_uses_wildcard_resource():
             assert s["Resource"] != "*"
 
 
+def test_site_deployment_invalidation_is_scoped_to_the_distribution():
+    """CDK gives the BucketDeployment helper CloudFront invalidation on "*"; the stack narrows it to the distribution."""
+    t = synth()
+    found = [s for s in statements(t) if any(a.startswith("cloudfront:") for a in (s["Action"] if isinstance(s["Action"], list) else [s["Action"]]))]
+    assert len(found) == 1
+    actions = found[0]["Action"] if isinstance(found[0]["Action"], list) else [found[0]["Action"]]
+    assert sorted(actions) == ["cloudfront:CreateInvalidation", "cloudfront:GetInvalidation"]
+    resource = json.dumps(found[0]["Resource"])
+    assert resource != '"*"' and ":distribution/" in resource
+    # No hard-coded partition or distribution id: the ARN is built from the partition and the distribution's Ref.
+    assert '"AWS::Partition"' in resource
+    dist_ids = [k for k, v in t.find_resources("AWS::CloudFront::Distribution").items()]
+    assert len(dist_ids) == 1 and json.dumps({"Ref": dist_ids[0]}) in resource
+
+
 def test_probe_disabled_removes_launch_permissions_and_cleanup():
     t = synth(enableTestLaunch="false")
     assert not any("ec2:RunInstances" in str(s["Action"]) for s in statements(t))

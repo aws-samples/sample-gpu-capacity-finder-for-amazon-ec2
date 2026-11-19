@@ -1,5 +1,7 @@
 # GPU Capacity Finder
 
+> This is sample code, for non-production usage. You should work with your security and legal teams to meet your organizational security, regulatory and compliance requirements before deployment.
+
 GPU Capacity Finder is a small decision-support web application that you deploy in your own AWS account to find GPU capacity on Amazon Elastic Compute Cloud (Amazon EC2). One page shows the public capacity signals: Capacity Block offerings, Spot placement scores, Spot prices, On-Demand list prices, and service quotas with their usage. You can check a signal with one bounded test launch and set optional email alerts. The page does not manage instances, reserve capacity, or launch your workloads. When you decide to act, you buy a Capacity Block in the EC2 console, and the page gives you an AWS Command Line Interface (AWS CLI) command to create a Capacity Reservation that you run yourself.
 
 ## Problem it solves
