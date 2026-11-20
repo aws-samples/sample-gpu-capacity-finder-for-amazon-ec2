@@ -1,0 +1,449 @@
+<!doctype html>
+<html lang="en-US">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title data-i18n="app.title">GPU Capacity Finder</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="mark" aria-hidden="true"></span>
+      <div>
+        <h1 data-i18n="app.title">GPU Capacity Finder</h1>
+        <p class="tagline" data-i18n="app.tagline">Find GPU capacity on Amazon EC2: On-Demand, Spot, and Capacity Blocks.</p>
+      </div>
+    </div>
+    <div class="topbar-tools">
+      <label class="lang"><span class="sr-only" data-i18n="lang.label">Language</span>
+        <select id="lang">
+          <!-- Language names stay in their own language, so they are not in the string files. -->
+          <option value="en-US" lang="en-US">English</option>
+          <option value="zh-TW" lang="zh-TW">繁體中文</option>
+          <option value="zh-CN" lang="zh-CN">简体中文</option>
+        </select>
+      </label>
+      <div id="auth"></div>
+    </div>
+  </header>
+  <div id="busy-bar" class="busy-bar" hidden></div>
+  <div id="sr-live" class="sr-only" aria-live="polite"></div>
+
+  <div class="content" id="boot-error-wrap" hidden>
+    <div class="alert alert-error" role="alert" id="boot-error">
+      <span id="boot-error-text"></span>
+      <button id="boot-retry" type="button" class="ghost" data-i18n="boot.retry">Try again</button>
+    </div>
+  </div>
+
+  <main id="app" hidden>
+    <nav class="tabbar">
+      <div class="tabs" role="tablist" data-i18n-attr="aria-label:tabs.label" aria-label="Views" id="tablist">
+        <button role="tab" id="tab-compare" aria-controls="panel-compare" aria-selected="true" tabindex="0" data-i18n="tab.compare">Spot score</button>
+        <button role="tab" id="tab-capacity" aria-controls="panel-capacity" aria-selected="false" tabindex="-1" data-i18n="tab.capacity">On-Demand and Spot</button>
+        <button role="tab" id="tab-blocks" aria-controls="panel-blocks" aria-selected="false" tabindex="-1" data-i18n="tab.blocks">Capacity Blocks</button>
+        <button role="tab" id="tab-quotas" aria-controls="panel-quotas" aria-selected="false" tabindex="-1" data-i18n="tab.quotas">Quotas</button>
+        <button role="tab" id="tab-alerts" aria-controls="panel-alerts" aria-selected="false" tabindex="-1" hidden data-i18n="tab.alerts">Alerts</button>
+        <button role="tab" id="tab-users" aria-controls="panel-users" aria-selected="false" tabindex="-1" data-i18n="tab.users">Users</button>
+      </div>
+    </nav>
+
+    <div class="content">
+      <!-- 1. Spot score (the tab id stays "compare", so old links still open it) -->
+      <div role="tabpanel" id="panel-compare" aria-labelledby="tab-compare" tabindex="0">
+        <section>
+          <div class="panel-head">
+            <h2 data-i18n="cmp.heading">Spot score</h2>
+            <div class="panel-tools">
+              <div class="panel-filters">
+                <div class="toggle w-toggle" role="group" data-i18n-attr="aria-label:cmp.viewLabel" aria-label="View">
+                  <button id="cmp-view-table" type="button" class="ghost" aria-pressed="true" data-i18n="cmp.viewTable">Table</button>
+                  <button id="cmp-view-map" type="button" class="ghost" aria-pressed="false" data-i18n="cmp.viewMap">Map</button>
+                </div>
+                <div class="tool-field w-families cmp-filters" id="cmp-filters" hidden>
+                  <span class="field-label" id="cmp-families-label" data-i18n="cmp.families">Families</span>
+                  <div id="cmp-families" class="ms"></div>
+                </div>
+              </div>
+              <span id="cmp-fresh" class="badge fresh"></span>
+              <span class="info-wrap">
+                <button id="cmp-info" type="button" class="info" aria-expanded="false" aria-controls="cmp-info-pop" data-i18n-attr="aria-label:fresh.infoLabel" aria-label="About these times"></button>
+                <span id="cmp-info-pop" class="popover" role="note" hidden></span>
+              </span>
+              <button id="cmp-refresh" type="button" class="ghost" data-i18n="action.refresh">Refresh</button>
+            </div>
+          </div>
+          <ul class="muted intro intro-list" id="cmp-intro"></ul>
+          <div id="cmp-empty" class="card empty-state" hidden>
+            <p data-i18n="cmp.noFamilySelected">No instance family selected. Choose at least one family to see its Spot scores.</p>
+            <button id="cmp-empty-all" type="button" data-i18n="cmp.selectAllFamilies">Select all families</button>
+          </div>
+          <div id="cmp-alerts"></div>
+          <p class="notice refresh-note is-empty" id="cmp-refresh-note" role="status"></p>
+          <div class="score-row" id="cmp-score-row">
+            <p class="muted legend legend-grid heat-legend" id="cmp-heat-legend"></p>
+            <div class="score-status">
+              <div id="cmp-score-progress" class="progress" hidden>
+                <progress id="cmp-score-bar" max="1" value="0" aria-labelledby="cmp-score-progress-text"></progress>
+                <span id="cmp-score-progress-text" class="muted"></span>
+              </div>
+            </div>
+          </div>
+          <div id="cmp-heat-box" class="heat-box">
+          <div class="heat-frame">
+          <div id="cmp-table-wrap" class="scroll heat-scroll">
+            <table id="cmp-table" class="heat">
+              <caption class="sr-only" data-i18n="cmp.caption">Spot placement score of each score group in each Region</caption>
+              <thead></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          </div>
+          <div id="cmp-idle" class="idle-regions" hidden></div>
+          </div>
+          <div id="cmp-map-wrap" hidden>
+            <p class="muted" id="cmp-map-desc"></p>
+            <div class="map-tools" role="group" data-i18n-attr="aria-label:map.zoomGroup" aria-label="Map zoom">
+              <button id="cmp-zoom-in" type="button" class="ghost small" data-i18n-attr="aria-label:map.zoomIn;title:map.zoomIn" aria-label="Zoom in" title="Zoom in">+</button>
+              <button id="cmp-zoom-out" type="button" class="ghost small" data-i18n-attr="aria-label:map.zoomOut;title:map.zoomOut" aria-label="Zoom out" title="Zoom out" disabled>−</button>
+              <button id="cmp-zoom-reset" type="button" class="ghost small" data-i18n="map.zoomReset" disabled>Reset zoom</button>
+              <small class="muted" data-i18n="map.zoomHint">Zoom with the buttons, or with Ctrl or Cmd and the mouse wheel. Drag to move the map.</small>
+            </div>
+            <svg id="cmp-map" viewBox="0 0 720 360" role="group" data-i18n-attr="aria-label:map.labelWorld" aria-label="Enabled Regions on a world map"></svg>
+            <p class="muted legend legend-grid" id="cmp-legend"></p>
+            <p class="muted" id="cmp-unplaced"></p>
+          </div>
+          <div id="cmp-detail" class="region-detail" role="region" aria-labelledby="cmp-detail-title" hidden></div>
+        </section>
+      </div>
+
+      <!-- 2. On-Demand and Spot -->
+      <div role="tabpanel" id="panel-capacity" aria-labelledby="tab-capacity" tabindex="0" hidden>
+        <section>
+          <div class="panel-head">
+            <h2 id="cap-title" data-i18n="cap.titleNoRegion">On-Demand and Spot capacity</h2>
+            <div class="panel-tools">
+              <div class="panel-filters">
+                <label class="tool-field w-region" for="cap-region"><span class="field-label" data-i18n="field.region">Region</span><select id="cap-region"></select></label>
+                <label class="tool-field w-type" for="cap-type"><span class="field-label" data-i18n="field.instanceType">Instance type</span><select id="cap-type"></select></label>
+                <button id="cap-edit-list" type="button" class="ghost w-button" data-i18n="list.edit">Edit instance list</button>
+              </div>
+              <span id="cap-fresh" class="badge fresh"></span>
+              <span class="info-wrap">
+                <button id="cap-info" type="button" class="info" aria-expanded="false" aria-controls="cap-info-pop" data-i18n-attr="aria-label:fresh.infoLabel" aria-label="About these times"></button>
+                <span id="cap-info-pop" class="popover" role="note" hidden></span>
+              </span>
+              <button id="cap-refresh" type="button" class="ghost" data-i18n="action.refresh">Refresh</button>
+            </div>
+          </div>
+          <p class="muted note" id="cap-type-note"></p>
+          <p class="notice refresh-note is-empty" id="cap-refresh-note" role="status"></p>
+          <div id="cap-alerts"></div>
+          <p class="od-line" id="cap-od">
+            <b id="cap-od-text"></b>
+            <span id="cap-od-fresh" class="badge fresh"></span>
+            <small class="muted" data-i18n="price.odInfo">Reference list price for Linux in this Region. Your price can differ with discounts, Savings Plans or taxes.</small>
+          </p>
+
+          <h3 data-i18n="cap.scoresTitle">Spot score by Region</h3>
+          <p class="muted" id="cap-scores-intro"></p>
+          <p class="muted legend" id="cap-score-legend"></p>
+          <div id="cap-scores" class="chips" aria-live="polite"></div>
+          <p class="muted note" id="cap-scores-note"></p>
+
+          <div id="tl-section" class="tl-section">
+            <h3 data-i18n="tl.title">Test launch</h3>
+            <p class="muted" data-i18n="tl.intro">A test launch asks EC2 for one instance in this Region's default VPC and terminates it right away. Choose a score group to let EC2 pick the size and the zone, or choose one size.</p>
+            <p class="muted" id="tl-off" hidden data-i18n="cap.probesOff">Test launches are turned off in this deployment.</p>
+            <div class="tl-form" id="tl-form">
+              <label class="tool-field tl-target" for="tl-target"><span class="field-label" data-i18n="tl.what">What to test</span><select id="tl-target"></select></label>
+              <label class="tool-field tl-market" for="tl-market"><span class="field-label" data-i18n="probe.dlgMarket">Market</span>
+                <select id="tl-market">
+                  <option value="on-demand" data-i18n="probe.modeOd">On-Demand</option>
+                  <option value="spot" data-i18n="probe.modeSpot">Spot</option>
+                </select>
+              </label>
+              <button id="tl-run" type="button" data-i18n="probe.test">Test launch</button>
+            </div>
+            <p class="muted tl-today" id="tl-today" role="status"></p>
+            <p class="notice" id="tl-note" role="status" hidden></p>
+            <div id="tl-result" aria-live="polite"></div>
+            <div id="tl-observed-wrap">
+              <h4 data-i18n="tl.observedTitle">Test launches in this Region, last 24 hours, all users</h4>
+              <div class="scroll">
+                <table id="tl-observed" class="cards-sm">
+                  <thead><tr>
+                    <th data-i18n="tl.colWhat">Tested</th><th data-i18n="probe.dlgMarket">Market</th><th data-i18n="tl.colResults">Results</th>
+                    <th data-i18n="tl.colLanded">Launched in</th><th data-i18n="tl.colLast">Latest</th>
+                  </tr></thead>
+                  <tbody></tbody>
+                </table>
+              </div>
+            </div>
+            <p class="muted" id="cap-probe-note"></p>
+          </div>
+
+          <div class="zones-head">
+            <h3 data-i18n="cap.zonesTitle">Availability Zones</h3>
+            <span class="info-wrap">
+              <button id="spot-info" type="button" class="info" aria-expanded="false" aria-controls="spot-info-pop" data-i18n-attr="aria-label:price.spotInfoLabel" aria-label="About Spot prices"></button>
+              <span id="spot-info-pop" class="popover" role="note" hidden></span>
+            </span>
+          </div>
+          <div class="scroll" id="cap-table-wrap">
+            <table id="cap-table" class="cards-sm">
+              <thead><tr>
+                <th data-i18n="col.zone">Zone</th>
+                <th data-i18n="cap.colPrice">Spot price / hr</th>
+                <th><span class="sr-only" data-i18n="col.action">Action</span></th>
+              </tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+
+      <!-- 3. Capacity Blocks -->
+      <div role="tabpanel" id="panel-blocks" aria-labelledby="tab-blocks" tabindex="0" hidden>
+        <section id="cb-panel">
+          <div class="panel-head head-inline">
+            <h2 data-i18n="cb.title">Find EC2 Capacity Blocks for ML</h2>
+            <div class="panel-tools no-filters">
+              <span class="info-wrap">
+                <button id="cb-info" type="button" class="info" aria-expanded="false" aria-controls="cb-info-pop" data-i18n-attr="aria-label:fresh.infoLabel" aria-label="About these times"></button>
+                <span id="cb-info-pop" class="popover" role="note" hidden></span>
+              </span>
+              <button id="cb-search-again" type="button" class="ghost" disabled data-i18n="cb.searchAgain">Search again</button>
+            </div>
+          </div>
+          <p class="muted intro" data-i18n="cb.intro1">A Capacity Block reserves GPU instances in one Availability Zone for a fixed number of days, starting on a date you choose from the offerings.</p>
+          <p class="muted intro" data-i18n="cb.intro2">Search several Regions and instance types at once for the earliest block you can buy, or find the largest instance count on offer now.</p>
+          <div id="cb-alerts"></div>
+          <div class="subtabs" role="tablist" data-i18n-attr="aria-label:cb.subtabsLabel" aria-label="Capacity Block tools" id="cb-subtabs">
+            <button role="tab" id="cb-tab-search" aria-controls="cb-panel-search" aria-selected="true" tabindex="0" data-i18n="cb.tabSearch">Search availability</button>
+            <button role="tab" id="cb-tab-max" aria-controls="cb-panel-max" aria-selected="false" tabindex="-1" data-i18n="cb.tabMax">Max capacity</button>
+          </div>
+
+          <div role="tabpanel" id="cb-panel-search" aria-labelledby="cb-tab-search" tabindex="0">
+            <div class="form-grid">
+              <div class="field">
+                <span class="field-label" id="cb-regions-label" data-i18n="field.regions">Regions</span>
+                <div id="cb-regions" class="ms"></div>
+              </div>
+              <div class="field">
+                <span class="field-label" id="cb-types-label" data-i18n="field.instanceTypes">Instance types</span>
+                <div id="cb-types" class="ms"></div>
+              </div>
+              <label class="field" for="cb-count"><span class="field-label" data-i18n="field.instanceCount">Instance count</span>
+                <input id="cb-count" type="number" min="1" max="64" value="1" inputmode="numeric"></label>
+              <label class="field" for="cb-days"><span class="field-label" data-i18n="field.durationDays">Duration (days)</span>
+                <select id="cb-days"></select></label>
+              <label class="field" for="cb-start"><span class="field-label" data-i18n="field.earliestStart">Earliest start (optional, UTC day)</span>
+                <input id="cb-start" type="date"></label>
+            </div>
+            <div class="controls">
+              <button id="cb-search" type="button" disabled data-i18n="cb.find">Find EC2 Capacity Block</button>
+              <button id="cb-alert" type="button" class="ghost" disabled data-i18n="cb.createAlert">Create arrival alert</button>
+              <span id="cb-form-status" class="muted" role="status"></span>
+            </div>
+            <div id="cb-alert-status" role="status"></div>
+            <!-- Under the buttons, so the form does not move when the first search adds this row -->
+            <div class="recent" id="cb-recent-wrap" hidden>
+              <span class="recent-label" id="cb-recent-label" data-i18n="cb.recent">Recent searches</span>
+              <div id="cb-recent" class="chips" role="list" aria-labelledby="cb-recent-label"></div>
+            </div>
+            <div id="cb-progress-wrap" class="progress" hidden>
+              <progress id="cb-progress" max="1" value="0" aria-labelledby="cb-progress-text"></progress>
+              <span id="cb-progress-text" class="muted"></span>
+            </div>
+            <p id="cb-note" class="muted"></p>
+            <ul id="cb-failures" class="failures"></ul>
+            <p class="muted" id="cb-buy-note" hidden></p>
+            <p class="muted small" id="cb-price-note" hidden></p>
+            <div class="scroll" id="cb-table-wrap" hidden>
+              <table id="cb-table" class="cards-sm">
+                <thead><tr>
+                  <th data-i18n="col.region">Region</th><th data-i18n="col.zone">Zone</th><th data-i18n="col.instanceType">Instance type</th>
+                  <th data-i18n="cb.colInstances">Instances</th><th data-i18n="cb.colStart">Start</th><th data-i18n="cb.colEnd">End</th>
+                  <th data-i18n="cb.colDuration">Duration</th><th data-i18n="cb.colFee">Upfront fee</th><th data-i18n="cb.colPerHour">Per instance-hour</th>
+                  <th data-i18n="cb.colBuy">Buy</th>
+                </tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div role="tabpanel" id="cb-panel-max" aria-labelledby="cb-tab-max" tabindex="0" hidden>
+            <p class="muted" data-i18n="cbm.intro">Pick an instance type, a Region, and a duration. The search finds the largest instance count, from 1 to 64, that has an offering, and the earliest start for that count.</p>
+            <div class="form-grid">
+              <label class="field" for="cbm-region"><span class="field-label" data-i18n="field.region">Region</span><select id="cbm-region"></select></label>
+              <label class="field" for="cbm-type"><span class="field-label" data-i18n="field.instanceType">Instance type</span><select id="cbm-type"></select></label>
+              <label class="field" for="cbm-days"><span class="field-label" data-i18n="field.durationDays">Duration (days)</span><select id="cbm-days"></select></label>
+            </div>
+            <div class="controls">
+              <button id="cbm-find" type="button" disabled data-i18n="cbm.find">Find max capacity</button>
+            </div>
+            <p id="cbm-status" class="muted" role="status">&nbsp;</p>
+            <div id="cbm-result" aria-live="polite"></div>
+          </div>
+        </section>
+      </div>
+
+      <!-- 4. Quotas -->
+      <div role="tabpanel" id="panel-quotas" aria-labelledby="tab-quotas" tabindex="0" hidden>
+        <section id="quota-panel">
+          <div class="panel-head">
+            <h2 data-i18n="q.title">Quotas</h2>
+            <div class="panel-tools">
+              <div class="panel-filters">
+                <label class="tool-field w-region" for="q-region"><span class="field-label" data-i18n="field.region">Region</span><select id="q-region"></select></label>
+              </div>
+              <span id="q-fresh" class="badge fresh"></span>
+              <span class="info-wrap">
+                <button id="q-info" type="button" class="info" aria-expanded="false" aria-controls="q-info-pop" data-i18n-attr="aria-label:fresh.infoLabel" aria-label="About these times"></button>
+                <span id="q-info-pop" class="popover" role="note" hidden></span>
+              </span>
+              <button id="q-refresh" type="button" class="ghost" data-i18n="action.refresh">Refresh</button>
+            </div>
+          </div>
+          <p class="muted" data-i18n="q.intro">Your GPU quotas, grouped by kind. Used is the highest value in the last hour from the Amazon CloudWatch usage metric of the quota. The page is read-only: request an increase in the Service Quotas console.</p>
+          <p class="muted" id="q-lag-note"></p>
+          <p class="notice refresh-note is-empty" id="q-refresh-note" role="status"></p>
+          <div id="q-alerts"></div>
+          <div class="notice" id="q-notice" role="status" hidden></div>
+          <div id="q-table" aria-live="polite"></div>
+        </section>
+      </div>
+
+      <!-- 5. Alerts -->
+      <div role="tabpanel" id="panel-alerts" aria-labelledby="tab-alerts" tabindex="0" hidden>
+        <section id="alerts-card">
+          <div class="panel-head head-inline">
+            <h2 data-i18n="alerts.title">Email alerts</h2>
+            <div class="panel-tools no-filters">
+              <span class="info-wrap">
+                <button id="alerts-info" type="button" class="info" aria-expanded="false" aria-controls="alerts-info-pop" data-i18n-attr="aria-label:fresh.infoLabel" aria-label="About these times"></button>
+                <span id="alerts-info-pop" class="popover" role="note" hidden></span>
+              </span>
+              <button id="alerts-refresh" type="button" class="ghost" data-i18n="action.refresh">Refresh</button>
+            </div>
+          </div>
+          <p class="muted" id="alerts-note"></p>
+          <div class="alert-form">
+            <label class="tool-field af-region" for="alert-region"><span class="field-label" data-i18n="field.region">Region</span><select id="alert-region"></select></label>
+            <label class="tool-field af-signal" for="alert-signal"><span class="field-label" data-i18n="alerts.signal">Signal</span>
+              <select id="alert-signal">
+                <option value="capacity-block" data-i18n="alerts.signalCb">Capacity Block offering</option>
+                <option value="spot-score" data-i18n="alerts.signalSpot">Spot placement score</option>
+              </select>
+            </label>
+            <label class="tool-field af-type" for="alert-type"><span class="field-label" id="alert-type-name">Instance type</span><select id="alert-type"></select></label>
+            <label class="tool-field af-count" id="alert-count-label" for="alert-count"><span class="field-label" data-i18n="field.instanceCount">Instance count</span><input id="alert-count" type="number" min="1" max="64" value="1" inputmode="numeric"></label>
+            <label class="tool-field af-days" id="alert-days-label" for="alert-days"><span class="field-label" data-i18n="alerts.days">Days</span><select id="alert-days"></select></label>
+            <label class="tool-field af-count" id="alert-threshold-label" for="alert-threshold" hidden><span class="field-label" data-i18n="alerts.threshold">Score at least</span><input id="alert-threshold" type="number" min="1" max="10" value="7"></label>
+            <button id="alert-add" class="af-add" type="button" data-i18n="alerts.add">Add alert</button>
+          </div>
+          <p class="muted small" id="alert-type-note"></p>
+          <div id="alert-status" role="status"></div>
+          <div id="alerts-alerts"></div>
+          <p class="alert alert-warn" id="alerts-confirm-hint" data-i18n="alerts.confirmHint">Not getting alert emails? Check that you chose Confirm subscription in the email from AWS Notifications. You confirm once per email address.</p>
+          <div class="scroll">
+            <table id="alerts-table" class="cards-sm">
+              <thead><tr>
+                <th data-i18n="col.region">Region</th><th data-i18n="col.instanceType">Instance type</th><th data-i18n="alerts.colSignal">Signal</th>
+                <th data-i18n="alerts.colState">State</th><th data-i18n="alerts.colChecked">Last checked</th>
+                <th><span class="sr-only" data-i18n="col.action">Action</span></th>
+              </tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+      <!-- 6. Users: a guide only. The page calls no API here and shows no user data. -->
+      <div role="tabpanel" id="panel-users" aria-labelledby="tab-users" tabindex="0" hidden>
+        <section id="users-card">
+          <div class="users-guide">
+            <div class="panel-head">
+              <h2 data-i18n="users.title">Manage users</h2>
+            </div>
+            <p data-i18n="users.intro">This page signs people in with Amazon Cognito. The page does not create or change users: you do that in the AWS Management Console. Only people with the right AWS permissions can open the user pool there. If you cannot, ask your administrator.</p>
+            <p class="users-console" id="users-console-wrap" hidden>
+              <a id="users-console" class="button-link" target="_blank" rel="noopener noreferrer"><span data-i18n="users.openConsole">Open Amazon Cognito console</span><span class="sr-only" data-i18n="common.newTab"> (opens in a new tab)</span></a>
+            </p>
+            <h3 data-i18n="users.addTitle">Add a user</h3>
+            <ol class="steps">
+              <li data-i18n="users.add1">Choose Create user.</li>
+              <li data-i18n="users.add2">Choose Send an email invitation.</li>
+              <li data-i18n="users.add3">Enter the person's email address. They sign in to this page with it.</li>
+              <li data-i18n="users.add4">Select Mark email address as verified. Email alerts need a verified address.</li>
+              <li data-i18n="users.add5">For the temporary password, choose Generate a password, then choose Create user.</li>
+              <li data-i18n="users.add6">Cognito emails the person a temporary password that is valid for 7 days. At first sign-in, they set a new password and enroll an authenticator app, because this page requires multi-factor authentication (MFA).</li>
+            </ol>
+            <h3 data-i18n="users.updateTitle">Update a user</h3>
+            <ol class="steps">
+              <li data-i18n="users.findUser">In the Users list, find the person by email address and open their details.</li>
+              <li data-i18n="users.resend">If the temporary password expired before the first sign-in, send the invitation again from their details page.</li>
+              <li data-i18n="users.resetPassword">If they forgot their password, choose Reset password. Cognito emails them a code, and they set a new password at the next sign-in.</li>
+              <li data-i18n="users.newPhone">If they have a new phone, remove their authenticator app (or reset their MFA) on their details page. At the next sign-in, they enroll the app again.</li>
+              <li data-i18n="users.disable">To stop someone from signing in, choose Disable user access. Their email alerts continue until you remove them.</li>
+            </ol>
+            <h3 data-i18n="users.deleteTitle">Delete a user</h3>
+            <ol class="steps">
+              <li data-i18n="users.findUser">In the Users list, find the person by email address and open their details.</li>
+              <li data-i18n="users.disableFirst">If the console asks, choose Disable user access first.</li>
+              <li data-i18n="users.deleteUser">Choose Delete user and confirm.</li>
+            </ol>
+            <p class="muted" data-i18n="users.deleteNote">Their email alerts and email subscription stay until you remove them. See Remove a user and their leftovers in the administrator guide.</p>
+          </div>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <div class="content">
+    <p id="signed-out" class="card muted" hidden data-i18n="auth.signedOut">Sign in to continue.</p>
+    <div id="signin-error"></div>
+  </div>
+
+  <dialog id="list-dialog" aria-labelledby="list-title">
+    <h2 id="list-title" data-i18n="list.title">Instance list</h2>
+    <p class="muted" id="list-help"></p>
+    <div class="list-tools">
+      <span id="list-count" class="muted" role="status" aria-live="polite"></span>
+      <span><button id="list-all" type="button" class="link" data-i18n="ms.selectAll">Select all</button>
+      <button id="list-none" type="button" class="link" data-i18n="ms.clear">Clear</button></span>
+    </div>
+    <div id="list-options" class="option-groups"></div>
+    <p id="list-limit" class="muted" role="status"></p>
+    <div id="list-error"></div>
+    <div class="dialog-actions">
+      <button id="list-save" type="button" data-i18n="action.save">Save</button>
+      <button id="list-cancel" type="button" class="ghost" data-i18n="action.cancel">Cancel</button>
+    </div>
+  </dialog>
+
+  <dialog id="cli-dialog" aria-labelledby="cli-title" aria-describedby="cli-warning">
+    <h2 id="cli-title" data-i18n="cli.title">Reserve with the AWS CLI</h2>
+    <p class="muted" id="cli-what" data-i18n="cli.what">An On-Demand Capacity Reservation holds EC2 capacity for one instance of this type in this Availability Zone, so a later launch there has room. The command reserves one Linux instance and ends the reservation one hour after you run it, unless you cancel it first. To use it, launch the same type in the same zone and target the reservation (the command uses targeted matching). This is an example command: change the instance count, the end date, or other parameters as you need before you run it.</p>
+    <dl class="facts" id="cli-facts"></dl>
+    <p class="alert alert-warn" id="cli-warning" data-i18n="cli.warning">A Capacity Reservation bills at the On-Demand rate from the moment it is created until it ends or you cancel it. This page does not create it for you.</p>
+    <code class="cli cli-block" id="cli-command" tabindex="0" data-i18n-attr="aria-label:cli.commandLabel" aria-label="Command"></code>
+    <div class="dialog-actions">
+      <button id="cli-copy" type="button" data-i18n="cb.copy">Copy CLI command</button>
+      <button id="cli-close" type="button" class="ghost" data-i18n="action.close">Close</button>
+    </div>
+  </dialog>
+
+  <dialog id="confirm-dialog" aria-labelledby="confirm-title" aria-describedby="confirm-body">
+    <h2 id="confirm-title"></h2>
+    <dl class="facts" id="confirm-facts"></dl>
+    <p id="confirm-body"></p>
+    <div class="dialog-actions">
+      <button id="confirm-ok" type="button"></button>
+      <button id="confirm-cancel" type="button" class="ghost" data-i18n="action.cancel">Cancel</button>
+    </div>
+  </dialog>
+  <script src="app.js"></script>
+</body>
+</html>
